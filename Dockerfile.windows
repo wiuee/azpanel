@@ -32,7 +32,6 @@ RUN $zip = 'C:\php-' + $env:PHP_VERSION + '.zip'; `
     if ($composerHash -ne $env:COMPOSER_PHAR_SHA256.ToLowerInvariant()) { throw ('Composer PHAR SHA256 mismatch: ' + $composerHash) }
 
 ENV PHP_HOME="C:\php" `
-    PATH="C:\php;${PATH}" `
     APP_DEBUG=false
 
 RUN Copy-Item C:\php\php.ini-production C:\php\php.ini; `
