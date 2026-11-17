@@ -11,7 +11,8 @@ RUN composer install \
     --optimize-autoloader \
     --no-plugins \
     --no-scripts \
-    --ignore-platform-req=ext-gd
+    --ignore-platform-req=ext-gd \
+    --ignore-platform-req=ext-bcmath
 
 FROM php:8.4.27-apache-bookworm
 ARG VERSION=v1.0.0

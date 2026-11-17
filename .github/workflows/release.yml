@@ -159,7 +159,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, gd, pdo_mysql, curl, openssl, zip, fileinfo, intl
+          extensions: bcmath, mbstring, gd, pdo_mysql, curl, openssl, zip, fileinfo, intl
           ini-values: memory_limit=512M, date.timezone=Asia/Shanghai
           coverage: none
           tools: composer:v2
