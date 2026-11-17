@@ -1,0 +1,67 @@
+# escape=`
+# syntax=docker/dockerfile:1
+
+FROM mcr.microsoft.com/windows/servercore:ltsc2022
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+ARG VERSION=v1.0.0
+ARG PHP_VERSION=8.4.27-1
+ARG PHP_ZIP_SHA256=dbae154a0a89791f36c3d48e68bae797878333e7d6cb5721e74617de59b63ab7
+ARG COMPOSER_VERSION=2.11.2
+ARG COMPOSER_PHAR_SHA256=dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028
+
+LABEL org.opencontainers.image.title="azpanel" `
+      org.opencontainers.image.description="azpanel web application" `
+      org.opencontainers.image.source="https://github.com/wiuee/azpanel" `
+      org.opencontainers.image.url="https://github.com/wiuee/azpanel" `
+      org.opencontainers.image.version=$VERSION
+
+RUN Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile C:\vc_redist.x64.exe; `
+    $process = Start-Process -FilePath C:\vc_redist.x64.exe -ArgumentList '/install','/quiet','/norestart' -Wait -PassThru; `
+    if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { throw "VC++ redistributable installer failed with exit code $($process.ExitCode)" }; `
+    Remove-Item C:\vc_redist.x64.exe
+
+RUN $zip = "C:\php-$env:PHP_VERSION.zip"; `
+    Invoke-WebRequest -Uri "https://windows.php.net/downloads/releases/php-$env:PHP_VERSION-nts-Win32-vs17-x64.zip" -OutFile $zip; `
+    $actualHash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant(); `
+    if ($actualHash -ne $env:PHP_ZIP_SHA256.ToLowerInvariant()) { throw "PHP ZIP SHA256 mismatch: $actualHash" }; `
+    Expand-Archive -Path $zip -DestinationPath C:\php; `
+    Remove-Item $zip; `
+    Invoke-WebRequest -Uri "https://getcomposer.org/download/$env:COMPOSER_VERSION/composer.phar" -OutFile C:\php\composer.phar; `
+    $composerHash = (Get-FileHash -Algorithm SHA256 C:\php\composer.phar).Hash.ToLowerInvariant(); `
+    if ($composerHash -ne $env:COMPOSER_PHAR_SHA256.ToLowerInvariant()) { throw "Composer PHAR SHA256 mismatch: $composerHash" }
+
+ENV PHP_HOME="C:\php" `
+    PATH="C:\php;${PATH}" `
+    APP_DEBUG=false
+
+RUN Copy-Item C:\php\php.ini-production C:\php\php.ini; `
+    @( `
+        'extension_dir = "C:\php\ext"', `
+        'extension = curl', `
+        'extension = fileinfo', `
+        'extension = gd', `
+        'extension = intl', `
+        'extension = mbstring', `
+        'extension = openssl', `
+        'extension = pdo_mysql', `
+        'extension = zip', `
+        'zend_extension = opcache', `
+        'date.timezone = Asia/Shanghai', `
+        'memory_limit = 512M' `
+    ) | Add-Content C:\php\php.ini; `
+    C:\php\php.exe -v; `
+    C:\php\php.exe -m
+
+WORKDIR C:\azpanel
+COPY composer.json composer.lock ./
+RUN C:\php\php.exe C:\php\composer.phar install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader --no-plugins --no-scripts
+COPY . .
+RUN C:\php\php.exe think service:discover; `
+    if ($LASTEXITCODE -ne 0) { throw 'ThinkPHP service discovery failed' }; `
+    C:\php\php.exe think vendor:publish; `
+    if ($LASTEXITCODE -ne 0) { throw 'ThinkPHP vendor publishing failed' }; `
+    New-Item -ItemType Directory -Force -Path C:\azpanel\runtime,C:\azpanel\storage | Out-Null
+
+EXPOSE 80
+CMD ["C:\\php\\php.exe", "-S", "0.0.0.0:80", "-t", "C:\\azpanel\\public", "C:\\azpanel\\public\\router.php"]

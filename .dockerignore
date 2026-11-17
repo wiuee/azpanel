@@ -1,0 +1,10 @@
+.git
+.github
+.gitignore
+.env
+*.log
+vendor
+runtime/*
+storage/*
+Dockerfile*
+docker-compose*.yml
